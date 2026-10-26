@@ -1,0 +1,29 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
+const XP=require('./xp-engine.js');
+const html=fs.readFileSync(__dirname+'/index.html','utf8'),inline=html.split('<script>')[1].split('</script>')[0];
+const plan=vm.runInNewContext(inline.split('const cues=')[0]+'plan');
+const today='2026-11-29';
+const done=d=>Object.fromEntries(plan[XP.date(d).getDay()].ex.map((_,i)=>[i,true]));
+const logs={};function complete(d){logs[d+'-'+XP.date(d).getDay()]=done(d)}
+complete('2026-10-26');
+let state=XP.sync(XP.fresh(),logs,plan,today,'now');assert.equal(XP.calculateTotalXP(state,today),100);
+state=XP.sync(JSON.parse(JSON.stringify(state)),logs,plan,today,'later');assert.equal(XP.calculateTotalXP(state,today),100);
+complete('2026-10-28');complete('2026-11-01');state=XP.sync(state,logs,plan,today,'now');assert.equal(XP.calculateTotalXP(state,today),450);assert.equal(XP.ledger(state,today).filter(e=>e.id.startsWith('week:')).length,1);
+logs['2026-10-26-1'][0]=false;state=XP.sync(state,logs,plan,today,'now');assert.equal(XP.calculateTotalXP(state,today),200);
+logs['2026-10-26-1'][0]=true;state=XP.sync(state,logs,plan,today,'now');assert.equal(XP.calculateTotalXP(state,today),450);
+state.recovery['2026-10-31']={completed:true};assert.equal(XP.calculateTotalXP(state,today),500);state.recovery['2026-10-31']={completed:true};assert.equal(XP.calculateTotalXP(state,today),500);
+assert.equal(XP.getLevel(499).level,1);assert.equal(XP.getLevel(500).rank,'Recruit');assert.equal(XP.getLevel(1000).rank,'Vigilante');assert.equal(XP.getLevel(1500).rank,'Web Warrior');assert.equal(XP.getLevel(2000).rank,'Neighborhood Legend');assert.equal(XP.getLevel(2500).level,6);
+assert.equal(XP.week('2027-01-03'),'2026-12-28');assert.equal(XP.week('2026-11-01'),'2026-10-26');
+for(let w=1;w<4;w++)for(const offset of [0,2,6])complete(XP.add('2026-10-26',w*7+offset));state=XP.sync(state,logs,plan,today,'now');assert(XP.getUnlockedAchievements(state,today).includes('streak'));
+state.personalRecords=[{id:'one',exercise:'pullup',reps:10,date:'2026-10-26',verified:true},{id:'one',exercise:'pullup',reps:10,date:'2026-10-26',verified:true},{id:'two',exercise:'pullup',reps:10,date:'2026-10-27',verified:true},{id:'three',exercise:'pushup',reps:40,date:'2026-10-27',verified:false}];assert.equal(XP.ledger(state,today).filter(e=>e.id.startsWith('pr:')).length,1);assert(XP.getUnlockedAchievements(state,today).includes('pull10'));assert(!XP.getUnlockedAchievements(state,today).includes('push40'));
+const before=JSON.stringify(logs);const reset=XP.reset(state,logs,plan,today);assert.equal(JSON.stringify(logs),before);assert.equal(XP.calculateTotalXP(XP.sync(reset,logs,plan,today,'now'),today),0);
+const bad={'2026-10-27-1':done('2026-10-26'),'2099-01-05-1':done('2026-10-26')};assert.equal(XP.calculateTotalXP(XP.sync(XP.fresh(),bad,plan,today,'now'),today),0);
+assert.equal(XP.calculateDailyXP({completed:true,workoutType:'conditioning'}),75);assert.equal(XP.calculateDailyXP({completed:true,workoutType:'active-recovery'}),40);
+// Execute the actual UI with persistent storage and DOM stand-ins.
+const store={'spiderman-checks':JSON.stringify({'2026-10-26-1':done('2026-10-26')}),'spiderman-weights':JSON.stringify([{date:'2026-10-26',value:209}])};
+function boot(){const nodes={};const node=id=>nodes[id]??={style:{},value:'',checked:false,innerHTML:'',setAttribute(){},querySelectorAll(){return []}};for(const match of html.matchAll(/id="([^"]+)"/g))node(match[1]);const ctx=vm.createContext({document:{getElementById:node,querySelectorAll:selector=>{if(selector==='[data-ex]'){nodes.exerciseInputs=[...node('exercises').innerHTML.matchAll(/data-ex="(\d+)" ([^>]*)>/g)].map(m=>({dataset:{ex:m[1]},checked:m[2].includes('checked')}));return nodes.exerciseInputs}return []}},localStorage:{getItem:k=>store[k]||null,setItem:(k,v)=>store[k]=v},performance:{now:()=>0},crypto:{randomUUID:()=>String(Math.random())},confirm:()=>true,console});vm.runInContext(fs.readFileSync(__dirname+'/xp-engine.js','utf8'),ctx);vm.runInContext(inline,ctx);vm.runInContext(fs.readFileSync(__dirname+'/xp-ui.js','utf8'),ctx);return {ctx,nodes}}
+let ui=boot();assert.match(ui.nodes.xpTotal.textContent,/100 \/ 500/);ui=boot();assert.match(ui.nodes.xpTotal.textContent,/100 \/ 500/);assert.match(ui.nodes.weightHistory.innerHTML,/209 lb/);
+ui.nodes.prExercise.value='pullup';ui.nodes.prDate.value='2026-10-26';ui.nodes.prReps.value='10';ui.nodes.prVerified.checked=false;ui.nodes.savePR.onclick();assert.match(ui.nodes.prStatus.textContent,/confirm/);ui.nodes.prVerified.checked=true;ui.nodes.savePR.onclick();assert.match(ui.nodes.xpTotal.textContent,/200 \/ 500/);
+vm.runInContext('selectDate(parseDate("2026-10-26"))',ui.ctx);ui.nodes.exerciseInputs[0].checked=false;ui.nodes.exerciseInputs[0].onchange();assert.match(ui.nodes.xpTotal.textContent,/100 \/ 500/);ui.nodes.exerciseInputs[0].checked=true;ui.nodes.exerciseInputs[0].onchange();assert.match(ui.nodes.xpTotal.textContent,/200 \/ 500/);ui.nodes.resetXP.onclick();assert.match(ui.nodes.xpTotal.textContent,/0 \/ 500/);assert.equal(JSON.parse(store['spiderman-weights'])[0].value,209);assert.equal(JSON.parse(store['spiderman-checks'])['2026-10-26-1'][0],true);ui=boot();assert.match(ui.nodes.xpTotal.textContent,/0 \/ 500/);
+assert.equal(plan[6].ex.length,0);assert.equal(plan[0].name,'Spider-Man Training');assert.match(html,/src="form-guide.png/);
+console.log('PASS: workout scoring, reload persistence, undo/recheck, weekly bonus/reversal, Saturday idempotence, levels, year/DST boundaries, four-week streak, PR verification/deduplication, future/mismatched dates, safe reset, weight preservation and UI startup.');

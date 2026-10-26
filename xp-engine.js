@@ -1,0 +1,25 @@
+/* S.P.I.D.E.R. award rules v1. No mutable XP balance. */
+(function(root){
+'use strict';
+const rewards=[100,100,40,100,75,75,50];
+const types=['strength','strength','active-recovery','strength','conditioning','conditioning','regeneration'];
+const ranks=['Rookie','Recruit','Vigilante','Web Warrior','Neighborhood Legend'];
+const achievements=[['first','First Swing'],['week','Three-Day Hero'],['recovery','Regeneration Protocol'],['streak','Consistency Is Power'],['level4','Web Warrior'],['level5','Neighborhood Legend'],['pull10','Ten Pull-Up Club'],['push40','Forty Push-Up Club']];
+function key(d){return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`}
+function date(s){if(typeof s!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(s))return null;const [y,m,d]=s.split('-').map(Number),v=new Date(y,m-1,d,12);return key(v)===s?v:null}
+function add(s,n){const d=date(s);d.setDate(d.getDate()+n);return key(d)}
+function week(s){const d=date(s);return add(s,-((d.getDay()+6)%7))}
+function fresh(){return {version:1,awardRulesVersion:1,workouts:{},recovery:{},personalRecords:[],achievements:[],blocked:{},xpAdjustments:[]}}
+function sync(state,checks,plan,today,now){const out=JSON.parse(JSON.stringify(state));const records={};for(const [entry,values] of Object.entries(checks)){const m=entry.match(/^(\d{4}-\d{2}-\d{2})-([0-6])$/);if(!m)continue;const d=date(m[1]),day=Number(m[2]);if(!d||d.getDay()!==day||day===6||m[1]>today||!values)continue;const complete=plan[day].ex.every((_,i)=>values[i]===true);if(!complete)delete out.blocked[m[1]];if(complete&&!out.blocked[m[1]])records[m[1]]={workoutType:types[day],completed:true,completedAt:state.workouts[m[1]]?.completedAt||now};}out.workouts=records;return out}
+function calculateDailyXP(record){if(!record?.completed)return 0;return {'strength':100,'active-recovery':40,'conditioning':75,'regeneration':50}[record.workoutType]||0}
+function calculateWeeklyBonus(records,start){return [0,2,6].every(offset=>records[add(start,offset)]?.completed&&records[add(start,offset)]?.workoutType==='strength')?150:0}
+function ledger(state,today){const entries=[];const valid={};for(const [day,r] of Object.entries(state.workouts)){const d=date(day);if(!d||day>today||d.getDay()===6||r.workoutType!==types[d.getDay()]||!r.completed)continue;valid[day]=r;entries.push({id:'workout:'+day,date:day,xp:calculateDailyXP(r),label:types[d.getDay()].replace('-',' ')+' workout'});}for(const [day,r] of Object.entries(state.recovery)){if(date(day)?.getDay()===6&&day<=today&&r.completed)entries.push({id:'recovery:'+day,date:day,xp:50,label:'Regeneration'});}
+for(const start of new Set(Object.keys(valid).map(week))){if(calculateWeeklyBonus(valid,start))entries.push({id:'week:'+start,date:add(start,6),xp:150,label:'Weekly strength mission'});}
+const best={pullup:0,pushup:0},seen=new Set();for(const pr of state.personalRecords){if(!date(pr.date)||pr.date>today||!pr.verified||!['pullup','pushup'].includes(pr.exercise)||!Number.isInteger(pr.reps)||pr.reps<1||pr.reps>1000||seen.has(pr.id))continue;seen.add(pr.id);if(pr.reps>best[pr.exercise]){best[pr.exercise]=pr.reps;entries.push({id:'pr:'+pr.id,date:pr.date,xp:100,label:`Verified ${pr.exercise==='pullup'?'pull-up':'push-up'} PR: ${pr.reps}`});}}
+return entries.sort((a,b)=>a.date.localeCompare(b.date)||a.id.localeCompare(b.id));}
+function calculateTotalXP(state,today){return ledger(state,today).reduce((sum,e)=>sum+e.xp,0)}
+function getLevel(total){const level=Math.floor(total/500)+1;return {level,rank:ranks[Math.min(level-1,4)],nextRank:ranks[Math.min(level,4)],next:level*500,remaining:level*500-total,progress:total%500}}
+function getUnlockedAchievements(state,today){const list=ledger(state,today),total=list.reduce((n,e)=>n+e.xp,0),unlocks=[];const weeks=list.filter(e=>e.id.startsWith('week:')).map(e=>e.id.slice(5)).sort();if(list.some(e=>e.id.startsWith('workout:')&&state.workouts[e.date].workoutType==='strength'))unlocks.push('first');if(weeks.length)unlocks.push('week');if(list.some(e=>e.id.startsWith('recovery:')))unlocks.push('recovery');if(weeks.some(start=>[1,2,3].every(n=>weeks.includes(add(start,7*n)))))unlocks.push('streak');if(total>=1500)unlocks.push('level4');if(total>=2000)unlocks.push('level5');if(state.personalRecords.some(p=>p.verified&&p.date<=today&&p.exercise==='pullup'&&p.reps>=10))unlocks.push('pull10');if(state.personalRecords.some(p=>p.verified&&p.date<=today&&p.exercise==='pushup'&&p.reps>=40))unlocks.push('push40');return unlocks}
+function reset(state,checks,plan,today){const out=fresh();const current=sync(fresh(),checks,plan,today,new Date().toISOString());for(const d of Object.keys(current.workouts))out.blocked[d]=true;return out}
+const api={rewards,types,ranks,achievements,key,date,add,week,fresh,sync,calculateDailyXP,calculateWeeklyBonus,ledger,calculateTotalXP,getLevel,getUnlockedAchievements,reset};root.SpiderXP=api;if(typeof module!=='undefined')module.exports=api;
+})(typeof globalThis!=='undefined'?globalThis:this);
