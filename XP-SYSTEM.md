@@ -25,3 +25,7 @@ Stable date-based award IDs prevent refresh, selection, repeated button presses,
 ## Validation
 
 Node tests pass in America/New_York and Pacific/Auckland: full-workout awards, incomplete/recomplete changes, refresh/reopen persistence, actual checkbox callbacks, weekly awards and reversal, Saturday idempotence, levels, four consecutive weeks, year/week boundaries, PR verification/deduplication, future and mismatched dates, reset exclusions, unchanged weight history, schedule and form-guide reference preservation. JavaScript syntax checks pass. Actual iPhone/Home Screen behavior and narrow Safari rendering could not be visually verified in this environment; responsive wrapping and existing installation metadata are preserved.
+
+## Per-set tracking
+
+`spiderman-sets-v1` stores partial set counts by local date, scheduled weekday and exercise index. Explicit prescriptions use their set count (for example 4 × 3 means four sets); Thursday and Friday circuits track two rounds, and ungrouped timed activities count once. Per-leg sets include both sides. Legacy checked exercises are treated as fully complete without rewriting their history. Each tap advances by one up to the target; Undo removes one. The existing completion boolean is true only at the target, preserving whole-workout XP rules. Partial set counts survive reloads and XP reset. Additional regression checks cover partial persistence, targets, completion caps, undo, legacy completion and future dates.
