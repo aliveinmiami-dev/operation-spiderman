@@ -2,7 +2,9 @@
 const XP=SpiderXP,XP_KEY='spiderman-xp-v1';
 let xpState;
 try{xpState=JSON.parse(localStorage.getItem(XP_KEY)||'null')}catch{xpState=null}
-if(!xpState||xpState.version!==1)xpState=XP.fresh();
+if(!xpState)xpState=XP.fresh();
+if(xpState.version!==1)throw new Error('Unsupported XP data version. Existing progress has been preserved.');
+for(const [field,value] of Object.entries(XP.fresh()))if(xpState[field]===undefined)xpState[field]=value;
 let previousTotal=null,previousAwards=new Set(),clockWall=Date.now(),clockMono=performance.now(),clockBlocked=false;
 function xpToday(){return dateKey(new Date())}
 function xpClockOK(){const drift=Date.now()-clockWall-(performance.now()-clockMono);if(Math.abs(drift)>300000)clockBlocked=true;return !clockBlocked}
