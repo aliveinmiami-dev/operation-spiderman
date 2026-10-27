@@ -10,6 +10,12 @@ No accounts. No backend. No analytics. No build step. Just one HTML file and you
 
 ---
 
+## Screenshots
+
+<img src="docs/screenshots/screenshot-1.jpg" alt="S.P.I.D.E.R. protocol and XP level header" width="240"> <img src="docs/screenshots/screenshot-2.jpg" alt="Daily mission with per-set tracking" width="240"> <img src="docs/screenshots/screenshot-3.jpg" alt="XP calendar heatmap and workout log" width="240">
+
+---
+
 ## What it does
 
 - **Daily missions** — a full 12-week plan with strength, conditioning, active recovery and a mandatory rest day. Each day lists its exercises, set targets, and coaching cues.
